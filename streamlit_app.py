@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 from urllib.parse import quote
 
 st.set_page_config(page_title="Divisão 50/50", layout="wide")
@@ -21,29 +20,20 @@ def carregar_sheet():
     df.columns = [c.strip() for c in df.columns]
     return df
 
-st.title("📊 Divisão 50/50 por Classificação + Filtro por Data (Formato BR)")
+st.title("📊 Divisão 50/50 + Classificações por Aba")
 
 df = carregar_sheet()
 
 # ============================
-# 🔥 COLUNA A = DATA
+# DATA = COLUNA A
 # ============================
-col_data = df.columns[0]   # coluna A automaticamente
+col_data = df.columns[0]
 df[col_data] = pd.to_datetime(df[col_data], errors="coerce")
 
-if df[col_data].isna().all():
-    st.error("❌ A coluna A não contém datas válidas. Verifique a planilha.")
-    st.stop()
-
-# ============================
-# 🔥 FILTRO DE DATA (FORMATO BR)
-# ============================
 min_date = df[col_data].min().date()
 max_date = df[col_data].max().date()
 
-st.write(
-    f"📅 Período disponível: **{min_date.strftime('%d/%m/%Y')}** até **{max_date.strftime('%d/%m/%Y')}**"
-)
+st.write(f"📅 Período: **{min_date.strftime('%d/%m/%Y')} → {max_date.strftime('%d/%m/%Y')}**")
 
 periodo = st.date_input(
     "Filtrar período",
@@ -56,17 +46,16 @@ df_filtrado = df[
     (df[col_data] <= pd.to_datetime(periodo[1]))
 ]
 
-# Criar coluna com data BR para mostrar na interface
 df_filtrado["Data (BR)"] = df_filtrado[col_data].dt.strftime("%d/%m/%Y")
 
 # ============================
-# 🔥 CLASSIFICAÇÃO = COLUNA G
+# CLASSIFICAÇÃO = COLUNA G
 # ============================
-col_classificacao = df.columns[6]  # coluna G = índice 6
-st.write(f"✔ Classificação detectada: **{col_classificacao}**")
+col_classificacao = df.columns[6]
+classificacoes_unicas = sorted(df_filtrado[col_classificacao].dropna().unique())
 
 # ============================
-# 🔥 DIVISÃO 50/50 POR GRUPO
+# DIVISÃO 50/50
 # ============================
 vendedor_a_list = []
 vendedor_b_list = []
@@ -82,41 +71,48 @@ df_vendedor_a = pd.concat(vendedor_a_list).sort_values(col_data) if vendedor_a_l
 df_vendedor_b = pd.concat(vendedor_b_list).sort_values(col_data) if vendedor_b_list else pd.DataFrame()
 
 # ============================
-# 🔥 ABAS DO DASHBOARD
+# ABAS PRINCIPAIS
 # ============================
 aba_geral, aba_a, aba_b = st.tabs(["📄 Geral", "🟦 Vendedor A", "🟥 Vendedor B"])
 
+# ----------------------------
+# 🔵 ABA GERAL COM SUB-ABAS
+# ----------------------------
 with aba_geral:
-    st.subheader("📄 Geral (filtrada por data)")
-    st.dataframe(df_filtrado, use_container_width=True)
+    st.subheader("📄 Geral")
 
-    st.download_button(
-        "📥 Baixar Geral",
-        df_filtrado.to_csv(index=False).encode(),
-        "geral.csv",
-        "text/csv"
-    )
+    sub_tabs = st.tabs(classificacoes_unicas)
 
+    for i, classificacao in enumerate(classificacoes_unicas):
+        with sub_tabs[i]:
+            df_temp = df_filtrado[df_filtrado[col_classificacao] == classificacao]
+            st.write(f"### {classificacao} — {len(df_temp)} registros")
+            st.dataframe(df_temp, use_container_width=True)
+
+# ----------------------------
+# 🟦 ABA VENDEDOR A
+# ----------------------------
 with aba_a:
-    st.subheader("🟦 Carteira Vendedor A (50%)")
-    st.dataframe(df_vendedor_a, use_container_width=True)
+    st.subheader("🟦 Vendedor A — 50% dos leads")
 
-    if not df_vendedor_a.empty:
-        st.download_button(
-            "📥 Baixar Vendedor A",
-            df_vendedor_a.to_csv(index=False).encode(),
-            "vendedor_a.csv",
-            "text/csv"
-        )
+    sub_tabs_a = st.tabs(classificacoes_unicas)
 
+    for i, classificacao in enumerate(classificacoes_unicas):
+        with sub_tabs_a[i]:
+            df_temp = df_vendedor_a[df_vendedor_a[col_classificacao] == classificacao]
+            st.write(f"### {classificacao} — {len(df_temp)} registros")
+            st.dataframe(df_temp, use_container_width=True)
+
+# ----------------------------
+# 🟥 ABA VENDEDOR B
+# ----------------------------
 with aba_b:
-    st.subheader("🟥 Carteira Vendedor B (50%)")
-    st.dataframe(df_vendedor_b, use_container_width=True)
+    st.subheader("🟥 Vendedor B — 50% dos leads")
 
-    if not df_vendedor_b.empty:
-        st.download_button(
-            "📥 Baixar Vendedor B",
-            df_vendedor_b.to_csv(index=False).encode(),
-            "vendedor_b.csv",
-            "text/csv"
-        )
+    sub_tabs_b = st.tabs(classificacoes_unicas)
+
+    for i, classificacao in enumerate(classificacoes_unicas):
+        with sub_tabs_b[i]:
+            df_temp = df_vendedor_b[df_vendedor_b[col_classificacao] == classificacao]
+            st.write(f"### {classificacao} — {len(df_temp)} registros")
+            st.dataframe(df_temp, use_container_width=True)
