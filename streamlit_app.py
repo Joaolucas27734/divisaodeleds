@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import unicodedata
 from urllib.parse import quote
 
 st.set_page_config(page_title="Divisão 50/50", layout="wide")
@@ -20,57 +21,73 @@ def carregar_sheet():
     df.columns = [c.strip() for c in df.columns]
     return df
 
-st.title("📊 Divisão 50/50 + Classificações por Aba")
+
+st.title("📊 Divisão 50/50 + Classificações por Aba (Todos os Leads Incluídos)")
 
 df = carregar_sheet()
 
 # ============================
-# DATA = COLUNA A
+# LIMPEZA DA CLASSIFICAÇÃO (COLUNA G)
 # ============================
-col_data = df.columns[0]   # coluna A
-df[col_data] = pd.to_datetime(df[col_data], errors="coerce")
+def limpar_texto(x):
+    if pd.isna(x) or str(x).strip() == "":
+        return "Sem classificação"
 
-min_date = df[col_data].min().date()
-max_date = df[col_data].max().date()
+    x = str(x)
+    x = x.replace("\u200f", "").replace("\u200e", "")
+    x = x.strip()
+    x = " ".join(x.split())
+
+    x = unicodedata.normalize("NFKD", x)
+    x = "".join(c for c in x if not unicodedata.combining(c))
+
+    return x.capitalize()
+
+col_classificacao = df.columns[6]
+df[col_classificacao] = df[col_classificacao].apply(limpar_texto)
+
+# Lista das classificações
+classificacoes_unicas = sorted(df[col_classificacao].unique())
+
+# ============================
+# DATA (COLUNA A), MAS NUNCA EXCLUI LEADS
+# ============================
+col_data = df.columns[0]
+df[col_data] = pd.to_datetime(df[col_data], errors="coerce")
+df["Data (BR)"] = df[col_data].dt.strftime("%d/%m/%Y").fillna("Sem data")
+
+# Filtro visual, mas sem excluir leads da divisão
+min_date = df[col_data].min()
+max_date = df[col_data].max()
 
 st.write(f"📅 Período disponível: **{min_date.strftime('%d/%m/%Y')} → {max_date.strftime('%d/%m/%Y')}**")
 
 periodo = st.date_input(
-    "Filtrar período",
-    value=(min_date, max_date),
+    "Período (apenas visual, não afeta divisão)",
+    value=(min_date.date(), max_date.date()),
     format="DD/MM/YYYY"
 )
 
-df_filtrado = df[
+df_visual = df[
     (df[col_data] >= pd.to_datetime(periodo[0])) &
     (df[col_data] <= pd.to_datetime(periodo[1]))
-]
-
-df_filtrado["Data (BR)"] = df_filtrado[col_data].dt.strftime("%d/%m/%Y")
+].copy()
 
 # ============================
-# CLASSIFICAÇÃO = COLUNA G
-# ============================
-col_classificacao = df.columns[6]
-classificacoes_unicas = sorted(df_filtrado[col_classificacao].dropna().unique())
-
-
-# ============================
-# DIVISÃO 50/50
+# DIVISÃO 50/50 (USANDO TODOS OS LEADS)
 # ============================
 vendedor_a_list = []
 vendedor_b_list = []
 
-for classificacao, grupo in df_filtrado.groupby(col_classificacao):
+for classificacao, grupo in df.groupby(col_classificacao):
     grupo_embaralhado = grupo.sample(frac=1, random_state=42)
     metade = len(grupo_embaralhado) // 2
 
     vendedor_a_list.append(grupo_embaralhado.iloc[:metade])
     vendedor_b_list.append(grupo_embaralhado.iloc[metade:])
 
-df_vendedor_a = pd.concat(vendedor_a_list).sort_values(col_data) if vendedor_a_list else pd.DataFrame()
-df_vendedor_b = pd.concat(vendedor_b_list).sort_values(col_data) if vendedor_b_list else pd.DataFrame()
-
+df_vendedor_a = pd.concat(vendedor_a_list).sort_values(col_data)
+df_vendedor_b = pd.concat(vendedor_b_list).sort_values(col_data)
 
 # ============================
 # ABAS PRINCIPAIS
@@ -82,25 +99,16 @@ aba_geralzona, aba_geral, aba_a, aba_b = st.tabs([
     "🟥 Vendedor B"
 ])
 
-
 # -------------------------------------------------------
-# 📚 GERALZONA
+# 📚 GERALZONA (VISUAL)
 # -------------------------------------------------------
 with aba_geralzona:
-    st.subheader("📚 Geralzona — Todos os Leads Misturados")
-    st.write(f"Total de registros filtrados: **{len(df_filtrado)}**")
-    st.dataframe(df_filtrado, use_container_width=True)
-
-    st.download_button(
-        "📥 Baixar Geralzona",
-        df_filtrado.to_csv(index=False).encode(),
-        "geralzona.csv",
-        "text/csv"
-    )
-
+    st.subheader("📚 Geralzona — Todos os Leads Filtrados")
+    st.write(f"Total exibido: **{len(df_visual)}**")
+    st.dataframe(df_visual, use_container_width=True)
 
 # -------------------------------------------------------
-# 📄 GERAL POR CLASSIFICAÇÃO
+# 📄 GERAL POR CLASSIFICAÇÃO (TUDO)
 # -------------------------------------------------------
 with aba_geral:
     st.subheader("📄 Geral por Classificação")
@@ -109,22 +117,22 @@ with aba_geral:
 
     for i, classificacao in enumerate(classificacoes_unicas):
         with sub_tabs_geral[i]:
-            df_temp = df_filtrado[df_filtrado[col_classificacao] == classificacao]
+            df_temp = df[df[col_classificacao] == classificacao]
             st.write(f"### {classificacao} — {len(df_temp)} registros")
             st.dataframe(df_temp, use_container_width=True)
-
 
 # -------------------------------------------------------
 # 🟦 VENDEDOR A
 # -------------------------------------------------------
 with aba_a:
-    st.subheader("🟦 Vendedor A — 50% dos leads")
+    st.subheader("🟦 Vendedor A — 50% dos Leads")
 
     classificacoes_a = ["GERAL"] + classificacoes_unicas
     sub_tabs_a = st.tabs(classificacoes_a)
 
     for i, classificacao in enumerate(classificacoes_a):
         with sub_tabs_a[i]:
+
             if classificacao == "GERAL":
                 df_temp = df_vendedor_a
                 st.write(f"### Geral — {len(df_temp)} registros")
@@ -134,18 +142,18 @@ with aba_a:
 
             st.dataframe(df_temp, use_container_width=True)
 
-
 # -------------------------------------------------------
 # 🟥 VENDEDOR B
 # -------------------------------------------------------
 with aba_b:
-    st.subheader("🟥 Vendedor B — 50% dos leads")
+    st.subheader("🟥 Vendedor B — 50% dos Leads")
 
     classificacoes_b = ["GERAL"] + classificacoes_unicas
     sub_tabs_b = st.tabs(classificacoes_b)
 
     for i, classificacao in enumerate(classificacoes_b):
         with sub_tabs_b[i]:
+
             if classificacao == "GERAL":
                 df_temp = df_vendedor_b
                 st.write(f"### Geral — {len(df_temp)} registros")
