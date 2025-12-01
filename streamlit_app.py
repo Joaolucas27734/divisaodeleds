@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 st.set_page_config(page_title="Divisão 50/50", layout="wide")
 
 # =====================================================
-# CONFIG / LOAD SHEET
+# CARREGAR PLANILHA
 # =====================================================
 SHEET_ID = "1UD2_Q9oua4OCqYls-Is4zVKwTc9LjucLjPUgmVmyLBc"
 SHEET_NAME = "Total"
@@ -20,7 +20,7 @@ def carregar_sheet():
     return df
 
 df = carregar_sheet()
-df = df.iloc[:, :7]  # usar só 7 colunas
+df = df.iloc[:, :7]  # usa 7 colunas
 
 # =====================================================
 # LIMPAR CLASSIFICAÇÃO
@@ -28,7 +28,6 @@ df = df.iloc[:, :7]  # usar só 7 colunas
 def limpar_texto(x):
     if pd.isna(x) or str(x).strip() == "":
         return "Sem classificação"
-
     x = str(x).replace("\u200f","").replace("\u200e","").strip()
     x = " ".join(x.split())
     x = unicodedata.normalize("NFKD", x)
@@ -40,7 +39,7 @@ df[col_classificacao] = df[col_classificacao].apply(limpar_texto)
 classificacoes = sorted(df[col_classificacao].unique())
 
 # =====================================================
-# DATAS
+# TRATAR DATA
 # =====================================================
 col_data = df.columns[0]
 
@@ -59,15 +58,15 @@ df["Data_Convertida"] = df[col_data].apply(tentar_converter)
 df["Data (BR)"] = df["Data_Convertida"].dt.strftime("%d/%m/%Y").fillna("Sem data")
 
 # =====================================================
-# MENU DE PÁGINAS
+# PÁGINAS
 # =====================================================
 st.sidebar.title("📑 Navegação")
 pagina = st.sidebar.radio("Escolha a página:", ["Geral", "Vendedor A", "Vendedor B"])
 
 # =====================================================
-# SELETOR AVANÇADO (STREAMLIT PURO)
+# SELETOR DE DATA (STREAMLIT PURO)
 # =====================================================
-st.sidebar.subheader("📅 Filtro de Datas")
+st.sidebar.subheader("📅 Filtro de Data")
 
 hoje = datetime.today().date()
 
@@ -75,8 +74,8 @@ preset = st.sidebar.selectbox(
     "Período:",
     [
         "Últimos 30 dias",
-        "Últimos 14 dias",
         "Últimos 7 dias",
+        "Últimos 14 dias",
         "Ontem",
         "Hoje",
         "Este mês",
@@ -85,7 +84,7 @@ preset = st.sidebar.selectbox(
     ]
 )
 
-def periodo_preset():
+def calcular_periodo():
     if preset == "Hoje":
         return hoje, hoje
     if preset == "Ontem":
@@ -97,19 +96,18 @@ def periodo_preset():
     if preset == "Últimos 30 dias":
         return hoje - timedelta(days=30), hoje
     if preset == "Este mês":
-        começo = hoje.replace(day=1)
-        return começo, hoje
+        return hoje.replace(day=1), hoje
     if preset == "Mês passado":
-        ultimo_mes = hoje.replace(day=1) - timedelta(days=1)
-        começo = ultimo_mes.replace(day=1)
-        return começo, ultimo_mes
+        fim = hoje.replace(day=1) - timedelta(days=1)
+        inicio = fim.replace(day=1)
+        return inicio, fim
     return None
 
 if preset != "Personalizado":
-    inicio, fim = periodo_preset()
+    inicio, fim = calcular_periodo()
 else:
     inicio, fim = st.sidebar.date_input(
-        "Selecione o intervalo:",
+        "Escolha o intervalo:",
         value=(hoje - timedelta(days=30), hoje),
         format="DD/MM/YYYY"
     )
@@ -122,7 +120,8 @@ df_visual = df[
 # =====================================================
 # DIVISÃO 50/50
 # =====================================================
-vendedor_a_list, vendedor_b_list = [], []
+vendedor_a_list = []
+vendedor_b_list = []
 
 for classif, grupo in df.groupby(col_classificacao):
     grupo = grupo.sample(frac=1, random_state=42)
@@ -138,8 +137,49 @@ df_b = pd.concat(vendedor_b_list)
 # =====================================================
 if pagina == "Geral":
     st.title("📁 Página Geral")
-
     aba1, aba2 = st.tabs(["📚 Geralzona", "📄 Por Classificação"])
 
     with aba1:
-        st
+        st.subheader("📚 Geralzona (Filtrada)")
+        st.write(f"Total: **{len(df_visual)}**")
+        st.dataframe(df_visual, use_container_width=True)
+
+    with aba2:
+        abas = st.tabs(classificacoes)
+        for i, classif in enumerate(classificacoes):
+            dft = df_visual[df_visual[col_classificacao] == classif]
+            with abas[i]:
+                st.write(f"### {classif} — {len(dft)}")
+                st.dataframe(dft, use_container_width=True)
+
+# =====================================================
+# PÁGINA: VENDEDOR A
+# =====================================================
+elif pagina == "Vendedor A":
+    st.title("🟦 Vendedor A — 50%")
+    abas = st.tabs(["GERAL"] + classificacoes)
+
+    for i, classif in enumerate(["GERAL"] + classificacoes):
+        if classif == "GERAL":
+            dft = df_a
+        else:
+            dft = df_a[df_a[col_classificacao] == classif]
+        with abas[i]:
+            st.write(f"### {classif} — {len(dft)}")
+            st.dataframe(dft, use_container_width=True)
+
+# =====================================================
+# PÁGINA: VENDEDOR B
+# =====================================================
+elif pagina == "Vendedor B":
+    st.title("🟥 Vendedor B — 50%")
+    abas = st.tabs(["GERAL"] + classificacoes)
+
+    for i, classif in enumerate(["GERAL"] + classificacoes):
+        if classif == "GERAL":
+            dft = df_b
+        else:
+            dft = df_b[df_b[col_classificacao] == classif]
+        with abas[i]:
+            st.write(f"### {classif} — {len(dft)}")
+            st.dataframe(dft, use_container_width=True)
