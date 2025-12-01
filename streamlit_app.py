@@ -6,7 +6,7 @@ from urllib.parse import quote
 st.set_page_config(page_title="Divisão 50/50", layout="wide")
 
 # =====================================================
-# CONFIG / LOAD SHEET
+# CONFIG / CARREGAR PLANILHA
 # =====================================================
 SHEET_ID = "1UD2_Q9oua4OCqYls-Is4zVKwTc9LjucLjPUgmVmyLBc"
 SHEET_NAME = "Total"
@@ -19,108 +19,144 @@ def carregar_sheet():
     return df
 
 
+# Carregar e limitar a 7 colunas
 df = carregar_sheet()
-df = df.iloc[:, :7]  # usar somente 7 colunas
-
+df = df.iloc[:, :7]  # apenas 7 primeiras colunas
 
 # =====================================================
-# LIMPEZA DA CLASSIFICAÇÃO (coluna G = índice 6)
+# LIMPAR CLASSIFICAÇÃO (COLUNA G = índice 6)
 # =====================================================
 def limpar_texto(x):
     if pd.isna(x) or str(x).strip() == "":
         return "Sem classificação"
+
     x = str(x)
-    x = x.replace("\u200f", "").replace("\u200e", "")  
+    x = x.replace("\u200f", "").replace("\u200e", "")  # caracteres invisíveis
     x = x.strip()
-    x = " ".join(x.split())
+    x = " ".join(x.split())  # remove espaços duplicados
+
+    # Remover acentos
     x = unicodedata.normalize("NFKD", x)
     x = "".join(c for c in x if not unicodedata.combining(c))
+
     return x.capitalize()
+
 
 col_classificacao = df.columns[6]
 df[col_classificacao] = df[col_classificacao].apply(limpar_texto)
 classificacoes = sorted(df[col_classificacao].unique())
 
 # =====================================================
-# DATA VISUAL (coluna A)
+# TRATAR DATA (COLUNA A) — CONVERSÃO FLEXÍVEL
 # =====================================================
 col_data = df.columns[0]
-df[col_data] = pd.to_datetime(df[col_data], errors="coerce")
-df["Data (BR)"] = df[col_data].dt.strftime("%d/%m/%Y").fillna("Sem data")
 
-min_date = df[col_data].min()
-max_date = df[col_data].max()
+def tentar_converter_data(x):
+    if pd.isna(x):
+        return pd.NaT
 
-st.sidebar.title("📑 Menu de Navegação")
+    x = str(x).strip()
+    formatos = ["%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y", "%m/%d/%Y"]
+
+    for fmt in formatos:
+        try:
+            return pd.to_datetime(x, format=fmt)
+        except:
+            pass
+
+    return pd.NaT
+
+
+df["Data_Convertida"] = df[col_data].apply(tentar_converter_data)
+df["Data (BR)"] = df["Data_Convertida"].dt.strftime("%d/%m/%Y").fillna("Sem data")
+
+datas_validas = df["Data_Convertida"].dropna()
+
+# =====================================================
+# MENU LATERAL (PÁGINAS)
+# =====================================================
+st.sidebar.title("📑 Navegação")
+
 pagina = st.sidebar.radio(
     "Escolha a página:",
     ["Geral", "Vendedor A", "Vendedor B"]
 )
 
-# Filtro visual
-periodo = st.sidebar.date_input(
-    "Filtro de período (VISUAL):",
-    value=(min_date.date(), max_date.date()),
-    format="DD/MM/YYYY"
-)
+# =====================================================
+# FILTRO DE DATA (SEM BUG 1970)
+# =====================================================
+if len(datas_validas) >= 2:
+    usar_filtro_data = True
+    min_date = datas_validas.min().date()
+    max_date = datas_validas.max().date()
 
-df_visual = df[
-    (df[col_data] >= pd.to_datetime(periodo[0])) &
-    (df[col_data] <= pd.to_datetime(periodo[1]))
-].copy()
+    periodo = st.sidebar.date_input(
+        "📅 Filtro de período (VISUAL):",
+        value=(min_date, max_date),
+        min_value=min_date,
+        max_value=max_date,
+        format="DD/MM/YYYY"
+    )
+
+    df_visual = df[
+        (df["Data_Convertida"] >= pd.to_datetime(periodo[0])) &
+        (df["Data_Convertida"] <= pd.to_datetime(periodo[1]))
+    ].copy()
+else:
+    st.sidebar.warning("⚠ Não há datas válidas suficientes. Filtro desativado.")
+    df_visual = df.copy()
+    usar_filtro_data = False
 
 # =====================================================
-# DIVISÃO 50/50 (todos os leads)
+# DIVISÃO 50/50 (POR CLASSIFICAÇÃO)
 # =====================================================
-vendedor_a_list, vendedor_b_list = [], []
+vendedor_a_list = []
+vendedor_b_list = []
 
-for c, grupo in df.groupby(col_classificacao):
-    grupo = grupo.sample(frac=1, random_state=42)
+for classif, grupo in df.groupby(col_classificacao):
+    grupo = grupo.sample(frac=1, random_state=42)  # embaralhar
     metade = len(grupo) // 2
+
     vendedor_a_list.append(grupo.iloc[:metade])
     vendedor_b_list.append(grupo.iloc[metade:])
 
-df_a = pd.concat(vendedor_a_list).sort_values(col_data)
-df_b = pd.concat(vendedor_b_list).sort_values(col_data)
+df_a = pd.concat(vendedor_a_list).sort_values("Data_Convertida")
+df_b = pd.concat(vendedor_b_list).sort_values("Data_Convertida")
 
 # =====================================================
 # PÁGINA: GERAL
 # =====================================================
 if pagina == "Geral":
-    st.title("🗂️ Página Geral")
+    st.title("📁 Página Geral")
 
-    tabs = st.tabs(["📚 Geralzona", "📄 Por Classificação"])
+    aba1, aba2 = st.tabs(["📚 Geralzona", "📄 Por Classificação"])
 
-    # GERALZONA
-    with tabs[0]:
+    # --------------- Geralzona ----------------------
+    with aba1:
         st.subheader("📚 Geralzona (VISUAL)")
         st.write(f"Total exibido: **{len(df_visual)}**")
         st.dataframe(df_visual, use_container_width=True)
 
-    # POR CLASSIFICAÇÃO
-    with tabs[1]:
-        st.subheader("📄 Por Classificação")
-
-        sub_tabs = st.tabs(classificacoes)
+    # --------------- Por Classificação --------------
+    with aba2:
+        st.subheader("📄 Geral por Classificação")
+        abas_class = st.tabs(classificacoes)
 
         for i, classif in enumerate(classificacoes):
-            with sub_tabs[i]:
+            with abas_class[i]:
                 df_temp = df[df[col_classificacao] == classif]
                 st.write(f"### {classif} — {len(df_temp)} registros")
                 st.dataframe(df_temp, use_container_width=True)
-
 
 # =====================================================
 # PÁGINA: VENDEDOR A
 # =====================================================
 elif pagina == "Vendedor A":
-    st.title("🟦 Vendedor A")
+    st.title("🟦 Vendedor A — 50% dos Leads")
+    abas = st.tabs(["GERAL"] + classificacoes)
 
-    classifs_a = ["GERAL"] + classificacoes
-    tabs = st.tabs(classifs_a)
-
-    for i, classif in enumerate(classifs_a):
-        with tabs[i]:
+    for i, classif in enumerate(["GERAL"] + classificacoes):
+        with abas[i]:
             if classif == "GERAL":
                 df_temp = df_a
             else:
@@ -129,18 +165,15 @@ elif pagina == "Vendedor A":
             st.write(f"### {classif} — {len(df_temp)} registros")
             st.dataframe(df_temp, use_container_width=True)
 
-
 # =====================================================
 # PÁGINA: VENDEDOR B
 # =====================================================
 elif pagina == "Vendedor B":
-    st.title("🟥 Vendedor B")
+    st.title("🟥 Vendedor B — 50% dos Leads")
+    abas = st.tabs(["GERAL"] + classificacoes)
 
-    classifs_b = ["GERAL"] + classificacoes
-    tabs = st.tabs(classifs_b)
-
-    for i, classif in enumerate(classifs_b):
-        with tabs[i]:
+    for i, classif in enumerate(["GERAL"] + classificacoes):
+        with abas[i]:
             if classif == "GERAL":
                 df_temp = df_b
             else:
