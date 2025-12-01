@@ -1,52 +1,52 @@
-function dividirLeads50_50() {
-  const sheetName = "Total";     // Nome da aba
-  const classificacaoCol = 7;    // Coluna G = 7
-  const responsavelCol = 8;      // Coluna H = onde será escrito Vendedor A / B
-  
-  const ss = SpreadsheetApp.getActive();
-  const sheet = ss.getSheetByName(sheetName);
-  const lastRow = sheet.getLastRow();
+import streamlit as st
+import pandas as pd
+import numpy as np
+from urllib.parse import quote
 
-  // Lê todos os dados
-  const data = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
+st.set_page_config(page_title="Divisão 50/50", layout="wide")
 
-  // Organiza por classificação
-  const grupos = {};
+# ID e aba
+SHEET_ID = "1UD2_Q9oua4OCqYls-Is4zVKwTc9LjucLjPUgmVmyLBc"
+SHEET_NAME = "Total"
 
-  data.forEach((row, i) => {
-    const classificacao = row[classificacaoCol - 1];
+# Carregar planilha
+@st.cache_data
+def carregar_sheet():
+    url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={quote(SHEET_NAME)}"
+    df = pd.read_csv(url, on_bad_lines="skip")
+    df.columns = [c.strip() for c in df.columns]
+    return df
 
-    if (!grupos[classificacao]) {
-      grupos[classificacao] = [];
-    }
+st.title("🔀 Divisão 50/50 por Classificação (Coluna G)")
 
-    grupos[classificacao].push({
-      index: i + 2,     // número da linha na planilha
-      dados: row
-    });
-  });
+df = carregar_sheet()
 
-  // Para cada classificação → embaralha → divide 50/50
-  for (let categoria in grupos) {
+if "Responsável" not in df.columns:
+    df["Responsável"] = ""
 
-    let lista = grupos[categoria];
+# Se a coluna G tiver outro nome, ajuste aqui:
+COL_CLASSIFICACAO = df.columns[6]   # Coluna G → índice 6
 
-    // Embaralhar (shuffle)
-    lista.sort(() => Math.random() - 0.5);
+st.write(f"✔ Coluna de classificação detectada: **{COL_CLASSIFICACAO}**")
 
-    const metade = Math.floor(lista.length / 2);
+# Divisão 50/50
+responsaveis = []
 
-    // Primeira metade → Vendedor A
-    lista.slice(0, metade).forEach(item => {
-      sheet.getRange(item.index, responsavelCol).setValue("Vendedor A");
-    });
+for classificacao, grupo in df.groupby(COL_CLASSIFICACAO):
+    grupo_embaralhado = grupo.sample(frac=1, random_state=42)  # embaralha
+    metade = len(grupo_embaralhado) // 2
 
-    // Segunda metade → Vendedor B
-    lista.slice(metade).forEach(item => {
-      sheet.getRange(item.index, responsavelCol).setValue("Vendedor B");
-    });
-  }
+    nomes = ["Vendedor A"] * metade + ["Vendedor B"] * (len(grupo_embaralhado) - metade)
+    grupo_embaralhado["Responsável"] = nomes
 
-  SpreadsheetApp.flush();
-  Logger.log("Divisão concluída!");
-}
+    responsaveis.append(grupo_embaralhado)
+
+df_final = pd.concat(responsaveis).sort_index()
+
+st.success("✅ Divisão 50/50 realizada com sucesso!")
+
+st.dataframe(df_final.head(50), use_container_width=True)
+
+# Download
+csv = df_final.to_csv(index=False).encode("utf-8")
+st.download_button("📥 Baixar CSV dividido", csv, "divisao_50_50.csv", "text/csv")
