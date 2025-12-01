@@ -120,7 +120,7 @@ with aba_geral:
 with aba_a:
     st.subheader("🟦 Vendedor A — 50% dos leads")
 
-    classificacoes_a = classificacoes_unicas + ["GERAL"]
+    classificacoes_a = ["GERAL"] + classificacoes_unicas
     sub_tabs_a = st.tabs(classificacoes_a)
 
     for i, classificacao in enumerate(classificacoes_a):
@@ -141,7 +141,7 @@ with aba_a:
 with aba_b:
     st.subheader("🟥 Vendedor B — 50% dos leads")
 
-    classificacoes_b = classificacoes_unicas + ["GERAL"]
+    classificacoes_b = ["GERAL"] + classificacoes_unicas
     sub_tabs_b = st.tabs(classificacoes_b)
 
     for i, classificacao in enumerate(classificacoes_b):
