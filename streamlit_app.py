@@ -18,10 +18,9 @@ def carregar_sheet():
     df.columns = [c.strip() for c in df.columns]
     return df
 
-
-# Carregar e limitar a 7 colunas
+# Carrega planilha e limita a 7 colunas
 df = carregar_sheet()
-df = df.iloc[:, :7]  # apenas 7 primeiras colunas
+df = df.iloc[:, :7]  # usa só as 7 primeiras colunas
 
 # =====================================================
 # LIMPAR CLASSIFICAÇÃO (COLUNA G = índice 6)
@@ -31,46 +30,39 @@ def limpar_texto(x):
         return "Sem classificação"
 
     x = str(x)
-    x = x.replace("\u200f", "").replace("\u200e", "")  # caracteres invisíveis
+    x = x.replace("\u200f", "").replace("\u200e", "")  # invisíveis
     x = x.strip()
-    x = " ".join(x.split())  # remove espaços duplicados
+    x = " ".join(x.split())  # espaços duplos -> simples
 
-    # Remover acentos
+    # Normaliza acentos
     x = unicodedata.normalize("NFKD", x)
     x = "".join(c for c in x if not unicodedata.combining(c))
 
     return x.capitalize()
-
 
 col_classificacao = df.columns[6]
 df[col_classificacao] = df[col_classificacao].apply(limpar_texto)
 classificacoes = sorted(df[col_classificacao].unique())
 
 # =====================================================
-# TRATAR DATA (COLUNA A) — CONVERSÃO FLEXÍVEL
+# TRATAR DATA (COLUNA A) SÓ PRA ORDENAR / EXIBIR
 # =====================================================
 col_data = df.columns[0]
 
 def tentar_converter_data(x):
     if pd.isna(x):
         return pd.NaT
-
     x = str(x).strip()
     formatos = ["%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y", "%m/%d/%Y"]
-
     for fmt in formatos:
         try:
             return pd.to_datetime(x, format=fmt)
-        except:
-            pass
-
+        except Exception:
+            continue
     return pd.NaT
-
 
 df["Data_Convertida"] = df[col_data].apply(tentar_converter_data)
 df["Data (BR)"] = df["Data_Convertida"].dt.strftime("%d/%m/%Y").fillna("Sem data")
-
-datas_validas = df["Data_Convertida"].dropna()
 
 # =====================================================
 # MENU LATERAL (PÁGINAS)
@@ -83,40 +75,14 @@ pagina = st.sidebar.radio(
 )
 
 # =====================================================
-# FILTRO DE DATA (SEM BUG 1970)
-# =====================================================
-if len(datas_validas) >= 2:
-    usar_filtro_data = True
-    min_date = datas_validas.min().date()
-    max_date = datas_validas.max().date()
-
-    periodo = st.sidebar.date_input(
-        "📅 Filtro de período (VISUAL):",
-        value=(min_date, max_date),
-        min_value=min_date,
-        max_value=max_date,
-        format="DD/MM/YYYY"
-    )
-
-    df_visual = df[
-        (df["Data_Convertida"] >= pd.to_datetime(periodo[0])) &
-        (df["Data_Convertida"] <= pd.to_datetime(periodo[1]))
-    ].copy()
-else:
-    st.sidebar.warning("⚠ Não há datas válidas suficientes. Filtro desativado.")
-    df_visual = df.copy()
-    usar_filtro_data = False
-
-# =====================================================
-# DIVISÃO 50/50 (POR CLASSIFICAÇÃO)
+# DIVISÃO 50/50 (POR CLASSIFICAÇÃO, USANDO TODOS OS LEADS)
 # =====================================================
 vendedor_a_list = []
 vendedor_b_list = []
 
 for classif, grupo in df.groupby(col_classificacao):
-    grupo = grupo.sample(frac=1, random_state=42)  # embaralhar
+    grupo = grupo.sample(frac=1, random_state=42)  # embaralha
     metade = len(grupo) // 2
-
     vendedor_a_list.append(grupo.iloc[:metade])
     vendedor_b_list.append(grupo.iloc[metade:])
 
@@ -133,9 +99,9 @@ if pagina == "Geral":
 
     # --------------- Geralzona ----------------------
     with aba1:
-        st.subheader("📚 Geralzona (VISUAL)")
-        st.write(f"Total exibido: **{len(df_visual)}**")
-        st.dataframe(df_visual, use_container_width=True)
+        st.subheader("📚 Geralzona (Todos os registros)")
+        st.write(f"Total exibido: **{len(df)}**")
+        st.dataframe(df, use_container_width=True)
 
     # --------------- Por Classificação --------------
     with aba2:
