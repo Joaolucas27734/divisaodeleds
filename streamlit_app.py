@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import unicodedata
 from urllib.parse import quote
+from datetime import datetime, timedelta
+from streamlit_date_range_picker import date_range_picker
 
 st.set_page_config(page_title="Divisão 50/50", layout="wide")
 
@@ -45,7 +47,7 @@ df[col_classificacao] = df[col_classificacao].apply(limpar_texto)
 classificacoes = sorted(df[col_classificacao].unique())
 
 # =====================================================
-# TRATAR DATA (COLUNA A) SÓ PRA ORDENAR / EXIBIR
+# TRATAR DATA (COLUNA A) para filtrar
 # =====================================================
 col_data = df.columns[0]
 
@@ -75,7 +77,37 @@ pagina = st.sidebar.radio(
 )
 
 # =====================================================
-# DIVISÃO 50/50 (POR CLASSIFICAÇÃO, USANDO TODOS OS LEADS)
+# SELETOR DE DATA AVANÇADO (LOOKER / GOOGLE ANALYTICS STYLE)
+# =====================================================
+st.sidebar.subheader("📅 Filtro de Data Avançado")
+
+hoje = datetime.today().date()
+
+presets = {
+    "Hoje": (hoje, hoje),
+    "Ontem": (hoje - timedelta(days=1), hoje - timedelta(days=1)),
+    "Últimos 7 dias": (hoje - timedelta(days=7), hoje),
+    "Últimos 14 dias": (hoje - timedelta(days=14), hoje),
+    "Últimos 30 dias": (hoje - timedelta(days=30), hoje),
+    "Este mês": (hoje.replace(day=1), hoje),
+    "Mês passado": ((hoje.replace(day=1) - timedelta(days=1)).replace(day=1),
+                    hoje.replace(day=1) - timedelta(days=1))
+}
+
+inicio, fim = date_range_picker(
+    label="Selecione um período:",
+    presets=presets,
+    default_value=presets["Últimos 30 dias"],
+    key="date_range"
+)
+
+df_visual = df[
+    (df["Data_Convertida"] >= pd.to_datetime(inicio)) &
+    (df["Data_Convertida"] <= pd.to_datetime(fim))
+]
+
+# =====================================================
+# DIVISÃO 50/50 (POR CLASSIFICAÇÃO)
 # =====================================================
 vendedor_a_list = []
 vendedor_b_list = []
@@ -99,9 +131,9 @@ if pagina == "Geral":
 
     # --------------- Geralzona ----------------------
     with aba1:
-        st.subheader("📚 Geralzona (Todos os registros)")
-        st.write(f"Total exibido: **{len(df)}**")
-        st.dataframe(df, use_container_width=True)
+        st.subheader("📚 Geralzona (Filtrada pela data)")
+        st.write(f"Total exibido: **{len(df_visual)}**")
+        st.dataframe(df_visual, use_container_width=True)
 
     # --------------- Por Classificação --------------
     with aba2:
@@ -110,8 +142,8 @@ if pagina == "Geral":
 
         for i, classif in enumerate(classificacoes):
             with abas_class[i]:
-                df_temp = df[df[col_classificacao] == classif]
-                st.write(f"### {classif} — {len(df_temp)} registros")
+                df_temp = df_visual[df_visual[col_classificacao] == classif]
+                st.write(f"### {classif} — {len(df_temp)} registros filtrados")
                 st.dataframe(df_temp, use_container_width=True)
 
 # =====================================================
