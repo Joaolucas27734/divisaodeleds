@@ -1,4 +1,3 @@
+streamlit
 pandas
 numpy
-streamlit
-streamlit-date-range-picker
