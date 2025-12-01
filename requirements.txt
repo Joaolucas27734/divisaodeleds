@@ -1,3 +1,4 @@
-plotly
 pandas
+numpy
 streamlit
+streamlit-date-range-picker
