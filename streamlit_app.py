@@ -29,7 +29,7 @@ df = carregar_sheet()
 # ============================
 # PEGAR SOMENTE AS 10 PRIMEIRAS COLUNAS
 # ============================
-df = df.iloc[:, :10]
+df = df.iloc[:, :8]
 
 # ============================
 # LIMPEZA DA CLASSIFICAÇÃO (COLUNA G = índice 6)
