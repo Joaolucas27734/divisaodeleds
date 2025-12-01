@@ -34,10 +34,11 @@ def limpar_texto(x):
         return "Sem classificação"
 
     x = str(x)
-    x = x.replace("\u200f", "").replace("\u200e", "")
+    x = x.replace("\u200f", "").replace("\u200e", "")  # remove invisíveis
     x = x.strip()
     x = " ".join(x.split())
 
+    # Normaliza acentos
     x = unicodedata.normalize("NFKD", x)
     x = "".join(c for c in x if not unicodedata.combining(c))
 
@@ -45,25 +46,23 @@ def limpar_texto(x):
 
 col_classificacao = df.columns[6]
 df[col_classificacao] = df[col_classificacao].apply(limpar_texto)
-
-# Lista das classificações
 classificacoes_unicas = sorted(df[col_classificacao].unique())
 
 # ============================
-# DATA (COLUNA A), MAS NUNCA EXCLUI LEADS
+# DATA (COLUNA A) — NÃO EXCLUI LEADS
 # ============================
 col_data = df.columns[0]
 df[col_data] = pd.to_datetime(df[col_data], errors="coerce")
 df["Data (BR)"] = df[col_data].dt.strftime("%d/%m/%Y").fillna("Sem data")
 
-# Filtro visual, mas sem excluir leads da divisão
+# Filtro apenas VISUAL
 min_date = df[col_data].min()
 max_date = df[col_data].max()
 
-st.write(f"📅 Período disponível: **{min_date.strftime('%d/%m/%Y')} → {max_date.strftime('%d/%m/%Y')}**")
+st.write(f"📅 Período (visual): **{min_date.strftime('%d/%m/%Y')} → {max_date.strftime('%d/%m/%Y')}**")
 
 periodo = st.date_input(
-    "Período (apenas visual, não afeta divisão)",
+    "Período apenas para visualização",
     value=(min_date.date(), max_date.date()),
     format="DD/MM/YYYY"
 )
@@ -74,7 +73,7 @@ df_visual = df[
 ].copy()
 
 # ============================
-# DIVISÃO 50/50 (USANDO TODOS OS LEADS)
+# DIVISÃO 50/50 (TODOS OS LEADS)
 # ============================
 vendedor_a_list = []
 vendedor_b_list = []
@@ -90,36 +89,39 @@ df_vendedor_a = pd.concat(vendedor_a_list).sort_values(col_data)
 df_vendedor_b = pd.concat(vendedor_b_list).sort_values(col_data)
 
 # ============================
-# ABAS PRINCIPAIS
+# ABAS PRINCIPAIS (UNIFICADAS)
 # ============================
-aba_geralzona, aba_geral, aba_a, aba_b = st.tabs([
-    "📚 Geralzona (Tudo Junto)",
-    "📄 Geral por Classificação",
+aba_geral, aba_a, aba_b = st.tabs([
+    "🗂️ Geral",
     "🟦 Vendedor A",
     "🟥 Vendedor B"
 ])
 
 # -------------------------------------------------------
-# 📚 GERALZONA (VISUAL)
-# -------------------------------------------------------
-with aba_geralzona:
-    st.subheader("📚 Geralzona — Todos os Leads Filtrados")
-    st.write(f"Total exibido: **{len(df_visual)}**")
-    st.dataframe(df_visual, use_container_width=True)
-
-# -------------------------------------------------------
-# 📄 GERAL POR CLASSIFICAÇÃO (TUDO)
+# 🗂️ ABA GERAL (UNIFICADA)
 # -------------------------------------------------------
 with aba_geral:
-    st.subheader("📄 Geral por Classificação")
+    st.subheader("🗂️ Geral — Visual + Classificações")
 
-    sub_tabs_geral = st.tabs(classificacoes_unicas)
+    sub_tabs_geral = st.tabs(["📚 Geralzona", "📄 Por Classificação"])
 
-    for i, classificacao in enumerate(classificacoes_unicas):
-        with sub_tabs_geral[i]:
-            df_temp = df[df[col_classificacao] == classificacao]
-            st.write(f"### {classificacao} — {len(df_temp)} registros")
-            st.dataframe(df_temp, use_container_width=True)
+    # ---- Geralzona ----
+    with sub_tabs_geral[0]:
+        st.write("### 📚 Geralzona — Todos os Leads Filtrados (Visual)")
+        st.write(f"Total exibido: **{len(df_visual)}**")
+        st.dataframe(df_visual, use_container_width=True)
+
+    # ---- Classificação ----
+    with sub_tabs_geral[1]:
+        st.write("### 📄 Geral por Classificação")
+
+        sub_class_tabs = st.tabs(classificacoes_unicas)
+
+        for i, classificacao in enumerate(classificacoes_unicas):
+            with sub_class_tabs[i]:
+                df_temp = df[df[col_classificacao] == classificacao]
+                st.write(f"### {classificacao} — {len(df_temp)} registros")
+                st.dataframe(df_temp, use_container_width=True)
 
 # -------------------------------------------------------
 # 🟦 VENDEDOR A
