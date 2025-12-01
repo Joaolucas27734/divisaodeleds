@@ -1,9 +1,52 @@
-import streamlit as st
+function dividirLeads50_50() {
+  const sheetName = "Total";     // Nome da aba
+  const classificacaoCol = 7;    // Coluna G = 7
+  const responsavelCol = 8;      // Coluna H = onde será escrito Vendedor A / B
+  
+  const ss = SpreadsheetApp.getActive();
+  const sheet = ss.getSheetByName(sheetName);
+  const lastRow = sheet.getLastRow();
 
-st.set_page_config(page_title="Planilha", layout="wide")
+  // Lê todos os dados
+  const data = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
 
-st.title("📄 Planilha conectada")
+  // Organiza por classificação
+  const grupos = {};
 
-sheet_url = "https://docs.google.com/spreadsheets/d/1UD2_Q9oua4OCqYls-Is4zVKwTc9LjucLjPUgmVmyLBc/edit?usp=sharing"
+  data.forEach((row, i) => {
+    const classificacao = row[classificacaoCol - 1];
 
-st.components.v1.iframe(sheet_url, height=800)
+    if (!grupos[classificacao]) {
+      grupos[classificacao] = [];
+    }
+
+    grupos[classificacao].push({
+      index: i + 2,     // número da linha na planilha
+      dados: row
+    });
+  });
+
+  // Para cada classificação → embaralha → divide 50/50
+  for (let categoria in grupos) {
+
+    let lista = grupos[categoria];
+
+    // Embaralhar (shuffle)
+    lista.sort(() => Math.random() - 0.5);
+
+    const metade = Math.floor(lista.length / 2);
+
+    // Primeira metade → Vendedor A
+    lista.slice(0, metade).forEach(item => {
+      sheet.getRange(item.index, responsavelCol).setValue("Vendedor A");
+    });
+
+    // Segunda metade → Vendedor B
+    lista.slice(metade).forEach(item => {
+      sheet.getRange(item.index, responsavelCol).setValue("Vendedor B");
+    });
+  }
+
+  SpreadsheetApp.flush();
+  Logger.log("Divisão concluída!");
+}
