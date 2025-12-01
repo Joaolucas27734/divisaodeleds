@@ -7,12 +7,11 @@ from urllib.parse import quote
 # ------------------------------
 # ⚙️ Configuração da página
 # ------------------------------
-st.set_page_config(page_title="Conexão com Planilhas", page_icon="📊", layout="wide")
+st.set_page_config(page_title="Conexão com Planilha 2", page_icon="📊", layout="wide")
 
 # ------------------------------
-# 🔗 IDs / URLs das planilhas
+# 🔗 ID da Planilha 2
 # ------------------------------
-SHEET_URL_1 = "https://docs.google.com/spreadsheets/d/1d07rdyAfCzyV2go0V4CJkXd53wUmoA058WeqaHfGPBk/export?format=csv"
 SHEET2_ID = "1UD2_Q9oua4OCqYls-Is4zVKwTc9LjucLjPUgmVmyLBc"
 DEFAULT_SHEET2_SHEETNAME = "Total"
 
@@ -44,9 +43,10 @@ sheet2_sheetname = st.sidebar.text_input(
     help="Tem que ser exatamente como aparece na guia do Google Sheets",
 )
 
-# Monta URL da Planilha 2 a partir do nome da aba
+# Gera a URL baseada na aba digitada
 SHEET_URL_2 = f"https://docs.google.com/spreadsheets/d/{SHEET2_ID}/gviz/tq?tqx=out:csv&sheet={quote(sheet2_sheetname)}"
 
+# Botão de atualizar
 if st.sidebar.button("🔄 Atualizar dados agora"):
     st.cache_data.clear()
     time.sleep(0.3)
@@ -55,32 +55,18 @@ if st.sidebar.button("🔄 Atualizar dados agora"):
 st.sidebar.success(f"✅ Dados atualizados às {time.strftime('%H:%M:%S')}")
 
 # ==============================
-# 📥 Carregamento das planilhas
+# 📥 Carregamento da Planilha 2
 # ==============================
-st.title("Conexão com Planilhas Google Sheets")
+st.title("Planilha 2 — Conexão e Prévia")
 
-# Planilha 1
-st.subheader("📂 Planilha 1 (Colaborador)")
-with st.spinner("Carregando Planilha 1…"):
-    try:
-        df1 = carregar_csv(SHEET_URL_1)
-        st.success("Planilha 1 carregada com sucesso!")
-        st.caption("Prévia (primeiras 50 linhas):")
-        st.dataframe(df1.head(50), use_container_width=True)
-    except Exception as e:
-        st.error(f"Erro ao carregar Planilha 1: {e}")
-        df1 = pd.DataFrame()
-
-st.markdown("---")
-
-# Planilha 2
-st.subheader("📂 Planilha 2 (Histórico)")
 with st.spinner("Carregando Planilha 2…"):
     try:
         df2 = carregar_csv(SHEET_URL_2)
-        st.success(f"Planilha 2 carregada com sucesso! (aba: {sheet2_sheetname})")
+        st.success(f"Planilha carregada com sucesso! (aba: {sheet2_sheetname})")
+
         st.caption("Prévia (primeiras 50 linhas):")
         st.dataframe(df2.head(50), use_container_width=True)
+
     except Exception as e:
         st.error(f"Erro ao carregar Planilha 2: {e}")
         df2 = pd.DataFrame()
