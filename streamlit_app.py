@@ -22,12 +22,17 @@ def carregar_sheet():
     return df
 
 
-st.title("📊 Divisão 50/50 + Classificações por Aba (Todos os Leads Incluídos)")
+st.title("📊 Divisão 50/50 + Classificações (Apenas 10 Primeiras Colunas)")
 
 df = carregar_sheet()
 
 # ============================
-# LIMPEZA DA CLASSIFICAÇÃO (COLUNA G)
+# PEGAR SOMENTE AS 10 PRIMEIRAS COLUNAS
+# ============================
+df = df.iloc[:, :10]
+
+# ============================
+# LIMPEZA DA CLASSIFICAÇÃO (COLUNA G = índice 6)
 # ============================
 def limpar_texto(x):
     if pd.isna(x) or str(x).strip() == "":
@@ -44,7 +49,8 @@ def limpar_texto(x):
 
     return x.capitalize()
 
-col_classificacao = df.columns[6]
+col_classificacao = df.columns[6]  # coluna G
+
 df[col_classificacao] = df[col_classificacao].apply(limpar_texto)
 classificacoes_unicas = sorted(df[col_classificacao].unique())
 
@@ -62,7 +68,7 @@ max_date = df[col_data].max()
 st.write(f"📅 Período (visual): **{min_date.strftime('%d/%m/%Y')} → {max_date.strftime('%d/%m/%Y')}**")
 
 periodo = st.date_input(
-    "Período apenas para visualização",
+    "Período apenas para exibição",
     value=(min_date.date(), max_date.date()),
     format="DD/MM/YYYY"
 )
@@ -89,7 +95,7 @@ df_vendedor_a = pd.concat(vendedor_a_list).sort_values(col_data)
 df_vendedor_b = pd.concat(vendedor_b_list).sort_values(col_data)
 
 # ============================
-# ABAS PRINCIPAIS (UNIFICADAS)
+# ABAS PRINCIPAIS
 # ============================
 aba_geral, aba_a, aba_b = st.tabs([
     "🗂️ Geral",
@@ -111,7 +117,7 @@ with aba_geral:
         st.write(f"Total exibido: **{len(df_visual)}**")
         st.dataframe(df_visual, use_container_width=True)
 
-    # ---- Classificação ----
+    # ---- Por Classificação ----
     with sub_tabs_geral[1]:
         st.write("### 📄 Geral por Classificação")
 
